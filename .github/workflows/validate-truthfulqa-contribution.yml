@@ -1,0 +1,97 @@
+name: Validate TruthfulQA contribution
+
+on:
+  push:
+    branches: [validation/truthfulqa-mc2-underflow]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.repository == 'Anormalm/lm-evaluation-harness'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare clean contribution worktree
+        run: |
+          git worktree add --detach ../candidate 95fa08a3a983e8db3035152588d43a7fc6412f07
+          python - <<'PY'
+          from hashlib import sha1
+          from pathlib import Path
+          import subprocess
+          original = subprocess.check_output(['git', 'show', 'b954108c9baaaa934b4ad842033b31a97ee30816:lm_eval/tasks/truthfulqa/utils.py'])
+          old = b'    # Convert log-likelihoods to probabilities.\n    probs = np.exp(ll)\n'
+          new = b'    # Shift before exponentiating to avoid underflow for small likelihoods.\n    probs = np.exp(ll - np.max(ll))\n'
+          assert original.count(old) == 1
+          fixed = original.replace(old, new)
+          assert sha1(b'blob ' + str(len(fixed)).encode() + b'\0' + fixed).hexdigest() == 'ae5d86880dda9990520e21309dcc307c4adb435c'
+          Path('../candidate/lm_eval/tasks/truthfulqa/utils.py').write_bytes(fixed)
+          PY
+      - name: Install native task and test dependencies
+        working-directory: ../candidate
+        run: |
+          python -m pip install uv
+          uv pip install --system -e '.[dev]' 'ruff==0.16.3'
+      - name: Check and format changed files
+        working-directory: ../candidate
+        run: |
+          ruff check --fix tests/test_truthfulqa_mc2_stability.py
+          ruff format tests/test_truthfulqa_mc2_stability.py
+          ruff check lm_eval/tasks/truthfulqa/utils.py tests/test_truthfulqa_mc2_stability.py
+          ruff format --check lm_eval/tasks/truthfulqa/utils.py tests/test_truthfulqa_mc2_stability.py
+          git diff --check
+      - name: Confirm native failures without the fix
+        working-directory: ../candidate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import xml.etree.ElementTree as ET
+          p = Path('lm_eval/tasks/truthfulqa/utils.py')
+          fixed = p.read_bytes()
+          try:
+              p.write_bytes(subprocess.check_output(['git', 'show', 'b954108c9baaaa934b4ad842033b31a97ee30816:lm_eval/tasks/truthfulqa/utils.py']))
+              run = subprocess.run(['python', '-m', 'pytest', 'tests/test_truthfulqa_mc2_stability.py', '-q', '--tb=short', '--junitxml=/tmp/truthfulqa-before.xml'], capture_output=True, text=True)
+          finally:
+              p.write_bytes(fixed)
+          Path('/tmp/truthfulqa-before.txt').write_text(run.stdout + run.stderr)
+          print(run.stdout)
+          print(run.stderr)
+          assert run.returncode == 1, run.returncode
+          suites = list(ET.parse('/tmp/truthfulqa-before.xml').getroot().iter('testsuite'))
+          assert sum(int(s.get('tests', 0)) for s in suites) == 16
+          assert sum(int(s.get('failures', 0)) for s in suites) > 0
+          assert sum(int(s.get('errors', 0)) for s in suites) == 0
+          PY
+      - name: Run fixed native regression tests
+        working-directory: ../candidate
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_truthfulqa_mc2_stability.py -q --tb=short | tee /tmp/truthfulqa-after.txt
+          python -m pip freeze > /tmp/truthfulqa-environment.txt
+      - name: Publish validated source cleanup and test formatting
+        working-directory: ../candidate
+        run: |
+          git config user.name Anormalm
+          git config user.email 177851299+Anormalm@users.noreply.github.com
+          git add lm_eval/tasks/truthfulqa/utils.py tests/test_truthfulqa_mc2_stability.py
+          git diff --cached --check
+          git commit -m 'Keep TruthfulQA change scoped to MC2 and format regression tests'
+          git push origin HEAD:refs/heads/fix/truthfulqa-mc2-underflow
+          git diff --stat b954108c9baaaa934b4ad842033b31a97ee30816 HEAD
+          git rev-parse HEAD > /tmp/truthfulqa-commit.txt
+      - name: Retain validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: truthfulqa-validation
+          path: /tmp/truthfulqa-*
+          if-no-files-found: ignore
+          retention-days: 7
