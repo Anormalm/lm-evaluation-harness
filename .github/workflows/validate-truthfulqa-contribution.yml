@@ -33,6 +33,10 @@ jobs:
           fixed = original.replace(old, new)
           assert sha1(b'blob ' + str(len(fixed)).encode() + b'\0' + fixed).hexdigest() == 'ae5d86880dda9990520e21309dcc307c4adb435c'
           Path('../candidate/lm_eval/tasks/truthfulqa/utils.py').write_bytes(fixed)
+          test = Path('../candidate/tests/test_truthfulqa_mc2_stability.py')
+          text = test.read_text()
+          assert text.count('zip(probabilities, labels)') == 1
+          test.write_text(text.replace('zip(probabilities, labels)', 'zip(probabilities, labels, strict=True)'))
           PY
       - name: Install native task and test dependencies
         working-directory: ../candidate
