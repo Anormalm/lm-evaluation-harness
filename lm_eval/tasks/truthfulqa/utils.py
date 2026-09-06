@@ -11,8 +11,8 @@ def process_results_mc2(doc, results):
     ll, _ = zip(*results)
     ll = np.array(ll)
 
-    # Convert log-likelihoods to probabilities.
-    probs = np.exp(ll)
+    # Shift before exponentiating to avoid underflow for small likelihoods.
+    probs = np.exp(ll - np.max(ll))
 
     # Normalize probabilities.
     probs_norm = probs / np.sum(probs)
@@ -112,14 +112,14 @@ def process_results_gen(doc, results):
         "bleu_acc": bleu_acc,
         "bleu_diff": bleu_diff,
         "rouge1_max": rouge1_max,
-        "rouge1_acc": rouge1_acc,
         "rouge1_diff": rouge1_diff,
+        "rouge1_acc": rouge1_acc,
         "rouge2_max": rouge2_max,
-        "rouge2_acc": rouge2_acc,
         "rouge2_diff": rouge2_diff,
+        "rouge2_acc": rouge2_acc,
         "rougeL_max": rougeL_max,
-        "rougeL_acc": rougeL_acc,
         "rougeL_diff": rougeL_diff,
+        "rougeL_acc": rougeL_acc,
     }
 
 
