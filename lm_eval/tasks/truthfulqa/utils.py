@@ -8,7 +8,7 @@ ROUGE_SCORER = None
 
 
 def process_results_mc2(doc, results):
-    ll, _ = zip(*results)
+    ll, _ = zip(*results, strict=False)
     ll = np.array(ll)
 
     # Shift before exponentiating to avoid underflow for small likelihoods.
@@ -112,14 +112,14 @@ def process_results_gen(doc, results):
         "bleu_acc": bleu_acc,
         "bleu_diff": bleu_diff,
         "rouge1_max": rouge1_max,
-        "rouge1_diff": rouge1_diff,
         "rouge1_acc": rouge1_acc,
+        "rouge1_diff": rouge1_diff,
         "rouge2_max": rouge2_max,
-        "rouge2_diff": rouge2_diff,
         "rouge2_acc": rouge2_acc,
+        "rouge2_diff": rouge2_diff,
         "rougeL_max": rougeL_max,
-        "rougeL_diff": rougeL_diff,
         "rougeL_acc": rougeL_acc,
+        "rougeL_diff": rougeL_diff,
     }
 
 
@@ -172,7 +172,7 @@ def rouge(refs, preds):
 
     # Accumulate confidence intervals.
     aggregator = scoring.BootstrapAggregator()
-    for ref, pred in zip(refs, preds):
+    for ref, pred in zip(refs, preds, strict=False):
         ref = _prepare_summary(ref)
         pred = _prepare_summary(pred)
         aggregator.add_scores(scorer.score(ref, pred))

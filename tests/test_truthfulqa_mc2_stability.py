@@ -17,7 +17,9 @@ def _decimal_reference(log_likelihoods, labels):
     with localcontext() as ctx:
         ctx.prec = 80
         probabilities = [Decimal(str(float(score))).exp() for score in log_likelihoods]
-        correct = sum(p for p, label in zip(probabilities, labels) if label == 1)
+        correct = sum(
+            p for p, label in zip(probabilities, labels, strict=True) if label == 1
+        )
         return float(correct / sum(probabilities))
 
 
