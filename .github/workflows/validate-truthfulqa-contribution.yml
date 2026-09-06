@@ -32,6 +32,11 @@ jobs:
           assert original.count(old) == 1
           fixed = original.replace(old, new)
           assert sha1(b'blob ' + str(len(fixed)).encode() + b'\0' + fixed).hexdigest() == 'ae5d86880dda9990520e21309dcc307c4adb435c'
+          # B905 requires an explicit choice; False preserves existing behavior.
+          assert fixed.count(b'zip(*results)') == 1
+          assert fixed.count(b'zip(refs, preds)') == 1
+          fixed = fixed.replace(b'zip(*results)', b'zip(*results, strict=False)')
+          fixed = fixed.replace(b'zip(refs, preds)', b'zip(refs, preds, strict=False)')
           Path('../candidate/lm_eval/tasks/truthfulqa/utils.py').write_bytes(fixed)
           test = Path('../candidate/tests/test_truthfulqa_mc2_stability.py')
           text = test.read_text()
@@ -87,7 +92,7 @@ jobs:
           git config user.email 177851299+Anormalm@users.noreply.github.com
           git add lm_eval/tasks/truthfulqa/utils.py tests/test_truthfulqa_mc2_stability.py
           git diff --cached --check
-          git commit -m 'Keep TruthfulQA change scoped to MC2 and format regression tests'
+          git commit -m 'Keep TruthfulQA normalization scoped and satisfy task lint checks'
           git push origin HEAD:refs/heads/fix/truthfulqa-mc2-underflow
           git diff --stat b954108c9baaaa934b4ad842033b31a97ee30816 HEAD
           git rev-parse HEAD > /tmp/truthfulqa-commit.txt
